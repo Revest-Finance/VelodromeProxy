@@ -137,7 +137,10 @@ contract VelodromeProxy is Ownable, IERC1155Receiver, IERC721Receiver, Reentranc
             uint tokensLength = _tokens[i].length;
             for (uint j; j < tokensLength; ++j) {
                 IERC20 token = IERC20(_tokens[j][i]);
-                token.transfer(OPERATOR, token.balanceOf(address(this)));
+                uint balance = token.balanceOf(address(this));
+                if(balance > 0) {
+                    token.transfer(OPERATOR, balance);
+                }
             }
         }
     }
@@ -152,7 +155,10 @@ contract VelodromeProxy is Ownable, IERC1155Receiver, IERC721Receiver, Reentranc
             uint tokensLength = _tokens[i].length;
             for (uint j; j < tokensLength; ++j) {
                 IERC20 token = IERC20(_tokens[j][i]);
-                token.transfer(OPERATOR, token.balanceOf(address(this)));
+                uint balance = token.balanceOf(address(this));
+                if(balance > 0) {
+                    token.transfer(OPERATOR, balance);
+                }
             }
         }
     }
