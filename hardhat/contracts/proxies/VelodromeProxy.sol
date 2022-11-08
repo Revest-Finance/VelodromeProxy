@@ -164,6 +164,7 @@ contract VelodromeProxy is Ownable, IERC1155Receiver, IERC721Receiver, Reentranc
 
     function reset() external nonReentrant onlyOperator {
         require(veNftId != 0 && principalFnftId != 0, "veNFT does not exist!");
+        require(LOCK_MANAGER.getLockMaturity(principalFnftId), "FNFT not ready to unlock");
         IVoter(VOTER).reset(veNftId);
     }
 
