@@ -119,5 +119,17 @@ interface IResonate {
         uint quantity
     ) external;
 
+    function createPool(
+        address asset,
+        address vault, 
+        uint128 rate,
+        uint128 additionalRate,
+        uint32 lockupPeriod, 
+        uint packetSize,
+        string calldata poolName
+    ) external returns (bytes32 poolId);
+
+    function submitProducer(bytes32 poolId, uint amount, bool shouldFarm) external;
+
     function claimInterest(uint fnftId, address recipient) external;
 }

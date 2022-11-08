@@ -2,14 +2,16 @@ pragma solidity >= 0.8.0;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "contracts/Resonate.sol";
+import "contracts/interfaces/IResonate.sol";
+import "contracts/interfaces/ISmartWallet.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
 import "contracts/proxies/VelodromeProxy.sol";
 import "contracts/proxies/IVotingEscrow.sol";
-import "contracts/SmartWalletWhitelistV2.sol";
 
 contract VelodromeProxyTest is Test {
-    Resonate resonate = Resonate(0x80CA847618030Bc3e26aD2c444FD007279DaF50A);
+    IResonate resonate = IResonate(0x80CA847618030Bc3e26aD2c444FD007279DaF50A);
     IERC1155 fnftHandler = IERC1155(0xA002Dc3E3C163732F4F5e6F941C87b61B5Afca74);
     bytes32 poolId;
     address alice = address(15);
@@ -35,10 +37,10 @@ contract VelodromeProxyTest is Test {
             0xb7d1b5A725F7f1977aAE752ba1fAE29341F1d7f9  // default pool
         );
 
-        address owner = resonate.owner();
+        address owner = Ownable(address(resonate)).owner();
         startHoax(owner, owner);
         poolId = resonate.createPool(address(VELO), 0x111A9B77f95B1E024DF162b42DeC0A2B1C51A00E, 200e18, 0, 86400, 1e14, "Foundry");
-        SmartWalletWhitelistV2(0x492CbB6217D34d68f0abb77a9D9781C8CcbfdFE8).approveWallet(address(VP));
+        ISmartWallet(0x492CbB6217D34d68f0abb77a9D9781C8CcbfdFE8).approveWallet(address(VP));
         vm.stopPrank();
     }
 
