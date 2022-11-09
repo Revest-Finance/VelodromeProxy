@@ -60,7 +60,7 @@ const config = {
             blockGasLimit: 12487794,
         },
         arbitrum: {
-            url: "https://arb1.arbitrum.io/rpc	",
+            url: "https://arb1.arbitrum.io/rpc",
             accounts: [PRIVATE_KEY],
             gasPrice: 0.1e9,
             chainId: 42161,
@@ -74,7 +74,7 @@ const config = {
             blockGasLimit: 12487794,
         },
         optimism: {
-            url: "https://mainnet.optimism.io	",
+            url: "https://mainnet.optimism.io",
             accounts: [PRIVATE_KEY],
             gasPrice: 1e7,
             chainId: 10,

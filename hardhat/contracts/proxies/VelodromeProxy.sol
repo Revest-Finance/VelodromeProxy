@@ -53,6 +53,7 @@ contract VelodromeProxy is Ownable, IERC1155Receiver, IERC721Receiver, Reentranc
         address _voter,
         address _default_pool
     ) {
+        require(_operator.code.length == 0, "Operator must be EOA.");
         OPERATOR = _operator;
         RESONATE = _resonate;
         FNFTHandler = IERC1155(IAddressRegistry(IResonate(RESONATE).REGISTRY_ADDRESS()).getRevestFNFT());
@@ -212,6 +213,8 @@ contract VelodromeProxy is Ownable, IERC1155Receiver, IERC721Receiver, Reentranc
     ) external nonReentrant returns (bytes4) {
         require(msg.sender == address(FNFTHandler), "!AUTH");
         require(OPERATOR.code.length == 0, "Operator must be EOA.");
+        require(veNftId != 0 && principalFnftId != 0, "veNFT does not exist!");
+        
         IAddressRegistry reg = IAddressRegistry(IResonate(RESONATE).REGISTRY_ADDRESS());
         if (_operator == reg.getRevest() && _from == address(0)) {
             // record id
