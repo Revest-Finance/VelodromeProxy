@@ -5,11 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 
@@ -18,18 +16,9 @@ import "../interfaces/IRevest.sol";
 import "../interfaces/IAddressRegistry.sol";
 import "../interfaces/IERC4626.sol";
 import "../interfaces/ILockManager.sol";
-import "../proxies/IVotingEscrow.sol";
-
-interface IVoter {
-    function claimBribes(address[] memory _bribes, address[][] memory _tokens, uint _tokenId) external;
-    function claimFees(address[] memory _fees, address[][] memory _tokens, uint _tokenId) external;
-    function vote(uint tokenId, address[] calldata _poolVote, uint256[] calldata _weights) external;
-    function reset(uint _tokenId) external;
-}
-
-interface IDistributor {
-    function claim(uint _tokenId) external returns (uint);
-}
+import "../interfaces/IVoter.sol";
+import "../interfaces/IVotingEscrow.sol";
+import "../interfaces/IDistributor.sol";
 
 /** 
  * @title VelodromeProxy 
@@ -125,6 +114,24 @@ contract VelodromeProxy is Ownable, IERC1155Receiver, IERC721Receiver, Reentranc
 
         veNftId = 0;
         principalFnftId = 0;
+    }
+
+    function claimRewards(address[] memory _gauges, address[][] memory _tokens) external nonReentrant onlyOperator {
+        require(veNftId != 0 && principalFnftId != 0, "veNFT does not exist!");
+
+        VOTER.claimRewards(_gauges, _tokens);
+
+        uint length = _gauges.length;
+        for (uint i; i < length; ++i) {
+            uint tokensLength = _tokens[i].length;
+            for (uint j; j < tokensLength; ++j) {
+                IERC20 token = IERC20(_tokens[j][i]);
+                uint balance = token.balanceOf(address(this));
+                if(balance > 0) {
+                    token.transfer(OPERATOR, balance);
+                }
+            }
+        }
     }
 
     function claimBribes(address[] memory _bribes, address[][] memory _tokens) external nonReentrant onlyOperator {

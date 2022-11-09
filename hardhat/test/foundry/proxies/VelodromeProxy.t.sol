@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "contracts/proxies/VelodromeProxy.sol";
-import "contracts/proxies/IVotingEscrow.sol";
+import "contracts/interfaces/IVotingEscrow.sol";
 
 contract VelodromeProxyTest is Test {
     IResonate resonate = IResonate(0x80CA847618030Bc3e26aD2c444FD007279DaF50A);
