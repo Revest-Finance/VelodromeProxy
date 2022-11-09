@@ -10,16 +10,24 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "contracts/proxies/VelodromeProxy.sol";
 import "contracts/interfaces/IVotingEscrow.sol";
 
+import "../../utils/Mock1155.sol";
+
 contract VelodromeProxyTest is Test {
     IResonate resonate = IResonate(0x80CA847618030Bc3e26aD2c444FD007279DaF50A);
     IERC1155 fnftHandler = IERC1155(0xA002Dc3E3C163732F4F5e6F941C87b61B5Afca74);
+    IVotingEscrow VE = IVotingEscrow(0x9c7305eb78a432ced5C4D14Cac27E8Ed569A2e26);
+    IERC20 VELO = IERC20(0x3c8B650257cFb5f272f799F5e2b4e65093a11a05);
+    IERC20 VELO_USDC_LP = IERC20(0xe8537b6FF1039CB9eD0B71713f697DDbaDBb717d);
+    
+    VelodromeProxy VP;
     bytes32 poolId;
     address alice = address(15);
     address team_velo = address(14);
-    IERC20 VELO = IERC20(0x3c8B650257cFb5f272f799F5e2b4e65093a11a05);
-    IERC20 VELO_USDC_LP = IERC20(0xe8537b6FF1039CB9eD0B71713f697DDbaDBb717d);
-    VelodromeProxy VP;
-    IVotingEscrow VE = IVotingEscrow(0x9c7305eb78a432ced5C4D14Cac27E8Ed569A2e26);
+    /**
+     * 1. Deploy new velodrome proxy
+     * 2. Create new resonate pool on VELO-USDC LP => VELO
+     * 3. Whitelist the velodrome proxy to use resonate
+     */
     function setUp() public {
         vm.label(alice, "alice");
         vm.label(team_velo, "team_velo");
@@ -43,7 +51,12 @@ contract VelodromeProxyTest is Test {
         ISmartWallet(0x492CbB6217D34d68f0abb77a9D9781C8CcbfdFE8).approveWallet(address(VP));
         vm.stopPrank();
     }
-
+    /**
+     * function submitConsumer() negatives: 
+     *      1. Invalid pool id
+     *      2. Invalid amount
+     *      3. tx sent from non-operator
+     */
     function testFail_SubmitConsumerInvalidPoolId() public {
         startHoax(alice, alice);
         VP.submitConsumer(bytes32(0), 100_000e18, false);
@@ -57,62 +70,49 @@ contract VelodromeProxyTest is Test {
         VP.submitConsumer(poolId, 100_000e18, false);
     }
 
-    function testFail_SubmitConsumerExistingVNFT() public {
-        startHoax(alice, alice);
-        uint amount = 100_000_000e18;
-        VELO_USDC_LP.approve(address(VP), ~uint(0));
-        VP.submitConsumer(poolId, amount, false);
-        vm.stopPrank();
-
-        startHoax(team_velo, team_velo);
-        VELO.approve(address(resonate), ~uint(0));
-        resonate.submitProducer(poolId, amount, false);
-        vm.stopPrank();
-
-        startHoax(alice, alice);
-        VELO_USDC_LP.approve(address(VP), ~uint(0));
-        VP.submitConsumer(poolId, amount, false);
-        vm.stopPrank();
-    }
-
+    /**
+     * function submitConsumer() positive: 
+        * Post conditions of this test
+        * 1. We should have one order in the consumer queue for poolId
+        * 2. This order should be owned by the VP contract (verified by trace)
+        * 3. alice should have half original velo lps
+        * 4. VP should have no velo lps
+        *
+    */
     function testSubmitConsumer() public {
+        uint startBal = VELO_USDC_LP.balanceOf(alice);
+
         // submit consumer through proxy
         startHoax(alice, alice);
         uint amount = 100_000_000e18;
         VELO_USDC_LP.approve(address(VP), ~uint(0));
         VP.submitConsumer(poolId, amount, false);
         vm.stopPrank();
-        /** 
-         * Post conditions of this test
-         * 1. We should have one order in the consumer queue for poolId
-         * 2. This order should be owned by the VP contract
-         * 3. alice should have no velo lps
-         * 4. VP should have no velo lps
-         */
+
+        // post
         (,,bytes32 _owner) = resonate.consumerQueue(poolId, 1);
-        assertEq(VELO_USDC_LP.balanceOf(alice), 100_000_000e18);
+        assertEq(VELO_USDC_LP.balanceOf(alice), startBal - amount);
         assertEq(VELO_USDC_LP.balanceOf(address(VP)), 0);
     }
 
+    /**
+     * function onERC1155Received() positive:
+        * Post conditions of this test, on1155Received should have triggered: 
+        * 1. saving the id of the principal
+        * 2. transferring the principal to the operator
+        * 3. locking up the velo balance into voting for 4 years
+     */
     function testTrigger() public {
-        // Creates a 100_000_000e18 consumer order
-        startHoax(alice, alice);
-        uint amount = 100_000_000e18;
-        VELO_USDC_LP.approve(address(VP), ~uint(0));
-        VP.submitConsumer(poolId, amount, false);
-        vm.stopPrank();
+        testSubmitConsumer();
 
+        // action from velo team to trigger system
         startHoax(team_velo, team_velo);
+        uint amount = 100_000_000e18;
         VELO.approve(address(resonate), ~uint(0));
         resonate.submitProducer(poolId, amount, false);
         vm.stopPrank();
 
-        /**
-         * Post conditions of this test, on1155Received should have triggered: 
-         * 1. saving the id of the principal
-         * 2. transferring the principal to the operator
-         * 3. locking up the velo balance into voting for 4 years
-         */
+        // post
         uint principalId = VP.principalFnftId();
         assertGt(principalId, 0);
         assertEq(fnftHandler.balanceOf(address(VP), principalId), 0);
@@ -122,24 +122,57 @@ contract VelodromeProxyTest is Test {
         assertGt(veNftId, 0);
         assertEq(VE.ownerOf(veNftId), address(VP));
     }
+    /**
+     *  function submitConsumer() negative:
+     *  trigger system then attempt to submit another consumer order    
+     */
+    function testFail_SubmitConsumerExistingVNFT() public {
+        testTrigger();
+        testSubmitConsumer();
+    }
+    /**
+     * Contract can only receive 1155s from resonate
+     */
+    function testFail_ReceiveOther1155() public {
+        Mock1155 mock1155 = new Mock1155();
+        mock1155.mint(alice, 1);
 
+        startHoax(alice, alice);
+        mock1155.safeTransferFrom(alice, address(VP), 0, 1, bytes(""));
+        vm.stopPrank();
+
+        assertEq(VP.veNftId(), 0);
+        assertEq(VP.principalFnftId(), 0);
+    }
+
+    /**
+     * Subsequent 1155 transfers should fail if the veNFT already exists. This
+     * prevents overwriting the veNftId.
+     */
+    function testFail_TriggerTwice() public {
+        testTrigger();
+
+        startHoax(team_velo, team_velo);
+        uint amount = 100_000_000e18;
+        VELO.approve(address(resonate), ~uint(0));
+        resonate.submitProducer(poolId, amount, false);
+        vm.stopPrank();
+    }
+
+    /**
+     * Claim function negatives:
+     *  1. Not operator calling
+     *  2. System not triggered
+     *  3. Withdrawing FNFT before unlock
+     */
     function testFail_ClaimBribeNotOperator() public {
         startHoax(address(13), address(13));
         VP.claimVeNFT();
     }   
-
     function testFail_ClaimBribeNoVNFT() public {
         startHoax(alice, alice);
         VP.claimVeNFT();    
     }
-
-    function testClaimBribe() public {
-        assertEq(true, false);
-    }
-    function testClaimFees() public {
-        assertEq(true, false);
-    }
-
     function testFail_WithdrawVNFTNotOperator() public {
         startHoax(address(13), address(13));
         VP.claimVeNFT();
@@ -149,31 +182,24 @@ contract VelodromeProxyTest is Test {
         VP.claimVeNFT();
     }
     function testFail_ImmediateWithdrawVNFT() public {
-        startHoax(alice, alice);
-        uint amount = 100_000_000e18;
-        VELO_USDC_LP.approve(address(VP), ~uint(0));
-        VP.submitConsumer(poolId, amount, false);
-        vm.stopPrank();
-
-        startHoax(team_velo, team_velo);
-        VELO.approve(address(resonate), ~uint(0));
-        resonate.submitProducer(poolId, amount, false);
-        vm.stopPrank();
+        testTrigger();
 
         startHoax(alice, alice);
         VP.claimVeNFT();
     }
-    function testWithdrawVNFT() public {
-        startHoax(alice, alice);
-        uint amount = 100_000_000e18;
-        VELO_USDC_LP.approve(address(VP), ~uint(0));
-        VP.submitConsumer(poolId, amount, false);
-        vm.stopPrank();
 
-        startHoax(team_velo, team_velo);
-        VELO.approve(address(resonate), ~uint(0));
-        resonate.submitProducer(poolId, amount, false);
-        vm.stopPrank();
+    function testClaimBribe() public {
+        assertEq(true, false);
+    }
+    function testClaimFees() public {
+        assertEq(true, false);
+    }
+
+    /**
+     *  function claimVeNFT() positive
+     */
+    function testWithdrawVNFT() public {
+        testTrigger();
 
         skip(2 days);
 
